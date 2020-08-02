@@ -8,6 +8,6 @@
     "reload": "^3.1.0"
   },
   "scripts": {
-    "start": "reload"
+    "start": "reload -e 'html|js|css|glsl'"
   }
 }
