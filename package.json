@@ -1,0 +1,13 @@
+{
+  "name": "webgl-vectors",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "onchange": "^7.0.2",
+    "reload": "^3.1.0"
+  },
+  "scripts": {
+    "start": "reload"
+  }
+}
