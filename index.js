@@ -1,3 +1,6 @@
+import GLProgram, { createGLProgram } from "./lib/GLProgram.js";
+import GLBuffer from "./lib/GLBuffer.js";
+
 const PI2 = Math.PI * 2;
 const Pi_4 = Math.PI / 4;
 const TARGET_FPS = 60;
@@ -12,13 +15,31 @@ async function init() {
   window.viewport = viewport;
   await viewport.initialize();
 
-  viewport.scene.play = {
+  viewport.scene.play1 = {
     position: [0.0, 0.0],
     shapes: heroShapes,
     visible: true,
     rotation: 0.0,
     scale: 100.0,
-    color: [1.0, 1.0, 1.0, 1.0],
+    color: [1.0, 0.0, 1.0, 1.0],
+  };
+
+  viewport.scene.play2 = {
+    position: [-150.0, -150.0],
+    shapes: heroShapes,
+    visible: true,
+    rotation: 0.0,
+    scale: 100.0,
+    color: [0.0, 1.0, 1.0, 1.0],
+  };
+
+  viewport.scene.play3 = {
+    position: [150.0, 150.0],
+    shapes: heroShapes,
+    visible: true,
+    rotation: 0.0,
+    scale: 100.0,
+    color: [1.0, 1.0, 0.0, 1.0],
   };
 
   let lastTickTime;
@@ -27,7 +48,9 @@ async function init() {
     const timeDelta = Math.min(timeNow - lastTickTime, maxTickDelta);
     lastTickTime = timeNow;
 
-    viewport.scene.play.rotation += 0.04;
+    viewport.scene.play1.rotation += 0.04;
+    viewport.scene.play2.rotation -= 0.04;
+    viewport.scene.play3.rotation += 0.04;
     //viewport.cameraRotation -= 0.01;
     //viewport.cameraX += 1.5;
 
@@ -174,7 +197,7 @@ class ViewportWebGL {
       containerId: "main",
       canvasId: "mainCanvas",
       removeCanvas: false,
-      lineWidth: 4.0,
+      lineWidth: 3.0,
       zoom: 1.0,
       zoomMin: 0.1,
       zoomMax: 10.0,
@@ -304,105 +327,6 @@ class ViewportWebGL {
     this.visibleBottom = this.visibleTop + this.visibleHeight;
   }
 
-  update(timeDelta) {
-    this.updateMetrics();
-    this.setCursor(this.cursorRawX, this.cursorRawY);
-    this.updateBackdrop(timeDelta);
-  }
-
-  draw() {
-    this.canvas.width = this.container.offsetWidth;
-    this.canvas.height = this.container.offsetHeight;
-
-    // draw the lines
-    {
-      this.gl.useProgram(this.lineDrawProgram);
-      this.setUniforms({
-        uLineWidth: [0.001 * this.lineWidth],
-        uCameraZoom: [this.zoom],
-        uCameraOrigin: [this.cameraX, this.cameraY],
-        uCameraRotation: [this.cameraRotation],
-        uViewportSize: [this.canvas.clientWidth, this.canvas.clientHeight],
-      });
-
-      // Re-allocate larger buffer if current is too small for the scene.
-      const bufferSize = this.calculateBufferSizeForScene();
-      this.actualBufferSize = this.buffer.length;
-      this.calculatedBufferSize = bufferSize;
-      if (bufferSize > this.buffer.length) {
-        this.buffer = new Float32Array(
-          Math.max(bufferSize * 1.5, this.buffer.length * 2)
-        );
-      }
-
-      const vertexCount = this.fillBufferFromScene();
-      this.lastVertexCount = vertexCount;
-      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.filterFramebuffer);
-      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-      this.gl.bufferData(
-        this.gl.ARRAY_BUFFER,
-        this.buffer,
-        this.gl.STATIC_DRAW
-      );
-      this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
-      this.gl.clearColor(0, 0, 0, 0);
-      this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
-      this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, vertexCount);
-    }
-
-    // --- filtering below ---
-    {
-      this.gl.useProgram(this.filterProgram);
-      this.gl.uniform;
-      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-      this.gl.bindTexture(this.gl.TEXTURE_2D, this.filterTexture);
-      this.resetBuffer();
-      this.pushBuffer(...this.createRect(-1, -1, 2, 2));
-      this.gl.bufferData(
-        this.gl.ARRAY_BUFFER,
-        this.buffer,
-        this.gl.STATIC_DRAW
-      );
-      this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
-      /*
-      this.gl.clearColor(0, 0, 0, 0);
-      this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
-      */
-      this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
-    }
-  }
-
-  // https://github.com/lesnitsky/webgl-month/blob/dev/src/shape-helpers.js#L3
-  createRect(top, left, width, height, angle = 0) {
-    const centerX = width / 2;
-    const centerY = height / 2;
-
-    const diagonalLength = Math.sqrt(centerX ** 2 + centerY ** 2);
-
-    const x1 = centerX + diagonalLength * Math.cos(angle + Pi_4);
-    const y1 = centerY + diagonalLength * Math.sin(angle + Pi_4);
-
-    const x2 = centerX + diagonalLength * Math.cos(angle + Pi_4 * 3);
-    const y2 = centerY + diagonalLength * Math.sin(angle + Pi_4 * 3);
-
-    const x3 = centerX + diagonalLength * Math.cos(angle - Pi_4);
-    const y3 = centerY + diagonalLength * Math.sin(angle - Pi_4);
-
-    const x4 = centerX + diagonalLength * Math.cos(angle - Pi_4 * 3);
-    const y4 = centerY + diagonalLength * Math.sin(angle - Pi_4 * 3);
-
-    return [
-      x1 + left,
-      y1 + top,
-      x2 + left,
-      y2 + top,
-      x3 + left,
-      y3 + top,
-      x4 + left,
-      y4 + top,
-    ];
-  }
-
   updateBackdrop() {
     if (!this.gridEnabled) {
       delete this.scene._backdrop;
@@ -413,7 +337,7 @@ class ViewportWebGL {
       this.scene._backdrop = {
         visible: true,
         position: [0.0, 0.0],
-        color: [1.0, 1.0, 1.0, 0.25],
+        color: [1.0, 1.0, 1.0, 0.3],
         scale: 1,
         rotation: Math.PI / 2,
         shapes: [],
@@ -444,21 +368,13 @@ class ViewportWebGL {
     }
   }
 
-  async initWebGL(canvas) {
-    const [
-      lineDrawVertexShaderSrc,
-      lineDrawFragmentShaderSrc,
-      filterVertexShaderSrc,
-      filterFragmentShaderSrc,
-    ] = await Promise.all(
-      [
-        "line-draw-vertex",
-        "line-draw-fragment",
-        "filter-vertex",
-        "filter-fragment",
-      ].map((name) => this.fetchShader(name))
-    );
+  update(timeDelta) {
+    this.updateMetrics();
+    this.setCursor(this.cursorRawX, this.cursorRawY);
+    this.updateBackdrop(timeDelta);
+  }
 
+  async initWebGL(canvas) {
     const gl = (this.gl = canvas.getContext("webgl", {
       antialias: true,
       preserveDrawingBuffer: true,
@@ -467,184 +383,169 @@ class ViewportWebGL {
 
     gl.disable(gl.DEPTH_TEST);
 
-    // Set up for data buffer
-    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-    const buffer = new Float32Array(200000);
+    this.textures = [];
+    this.framebuffers = [];
+    for (let idx = 0; idx < 5; idx++) {
+      const { texture, framebuffer } = this.createTextureAndFramebuffer();
+      this.textures.push(texture);
+      this.framebuffers.push(framebuffer);
+    }
 
-    const programLineDraw = new GLProgram({
+    const programLineDraw = (this.programLineDraw = new GLProgram({
       gl,
-      vertexShaderName: 'line-draw-vertex',
-      fragmentShaderName: 'line-draw-fragment',
-    });
-
-    const programFilter = new GLProgram({
-      gl,
-      vertexShaderName: 'filter-vertex',
-      fragmentShaderName: 'filter-fragment',
-    });
-
+      vertexShaderName: "line-draw-vertex",
+      fragmentShaderName: "line-draw-fragment",
+    }));
     await programLineDraw.initialize();
-    await programFilter.initialize();
+    this.lineProgramGLBuffer = gl.createBuffer();
 
-    console.log("PROGRAM LINE DRAW", programLineDraw);
-    console.log("PROGRAM FILTER", programFilter);
+    this.programBlurFilter = await createGLProgram({
+      gl,
+      vertexShaderName: "filter-blur-vertex",
+      fragmentShaderName: "filter-blur-fragment",
+      buffer: this.createFullCanvasBuffer(),
+    });
 
-    const lineDrawProgram = (this.lineDrawProgram = this.createProgram(
-      this.createShader(gl.VERTEX_SHADER, lineDrawVertexShaderSrc),
-      this.createShader(gl.FRAGMENT_SHADER, lineDrawFragmentShaderSrc)
-    ));
+    this.programColorFilter = await createGLProgram({
+      gl,
+      vertexShaderName: "filter-vertex",
+      fragmentShaderName: "filter-fragment",
+      buffer: this.createFullCanvasBuffer(),
+    });
 
-    // First pass through attributes to count total vertex size and index by name
-    const numAttribs = gl.getProgramParameter(
-      lineDrawProgram,
-      gl.ACTIVE_ATTRIBUTES
+    this.programSimpleBlur = await createGLProgram({
+      gl,
+      vertexShaderName: "filter-simple-blur-vertex",
+      fragmentShaderName: "filter-simple-blur-fragment",
+      buffer: this.createFullCanvasBuffer(),
+    });
+
+    this.programCombine = await createGLProgram({
+      gl,
+      vertexShaderName: "combine-vertex",
+      fragmentShaderName: "combine-fragment",
+      buffer: this.createFullCanvasBuffer(),
+    });
+  }
+
+  createFullCanvasBuffer() {
+    const gl = this.gl;
+    return new GLBuffer(
+      gl,
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -1.0]),
+      gl.STATIC_DRAW
     );
-    const attribs = {};
-    let vertexSize = 0;
-    for (let i = 0; i < numAttribs; i++) {
-      const info = gl.getActiveAttrib(lineDrawProgram, i);
-      const size = TYPE_SIZES[info.type];
-      vertexSize += size;
-      attribs[info.name] = i;
-    }
-
-    // Second pass through attributes to set up attribute pointers into the buffer
-    let pos = 0;
-    for (let i = 0; i < numAttribs; i++) {
-      const info = gl.getActiveAttrib(lineDrawProgram, i);
-      const size = TYPE_SIZES[info.type];
-      gl.vertexAttribPointer(i, size, gl.FLOAT, false, vertexSize * 4, pos * 4);
-      gl.enableVertexAttribArray(i);
-      pos += size;
-    }
-
-    // Index uniform locations by name
-    const uniforms = {};
-    const numUniforms = gl.getProgramParameter(
-      lineDrawProgram,
-      gl.ACTIVE_UNIFORMS
-    );
-    for (let i = 0; i < numUniforms; i++) {
-      const info = gl.getActiveUniform(lineDrawProgram, i);
-      uniforms[info.name] = gl.getUniformLocation(lineDrawProgram, info.name);
-    }
-
-    const filterProgram = (this.filterProgram = this.createProgram(
-      this.createShader(gl.VERTEX_SHADER, filterVertexShaderSrc),
-      this.createShader(gl.FRAGMENT_SHADER, filterFragmentShaderSrc)
-    ));
-
-    ({
-      texture: this.filterTexture,
-      framebuffer: this.filterFramebuffer,
-    } = this.createCanvasTexture());
-
-    Object.assign(this, { gl, uniforms, attribs, vertexSize, buffer });
   }
 
-  async fetchShader(name) {
-    const resp = await fetch(`shaders/${name}.glsl`);
-    return resp.text();
-  }
-
-  createShader(type, source) {
-    const shader = this.gl.createShader(type);
-    this.gl.shaderSource(shader, source);
-    this.gl.compileShader(shader);
-    const success = this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS);
-    if (success) {
-      return shader;
-    }
-
-    // console.log('shader', type, 'failed to compile', this.gl.getShaderInfoLog(shader));
-    this.gl.deleteShader(shader);
-  }
-
-  createProgram(vertexShader, fragmentShader) {
-    const program = this.gl.createProgram();
-    this.gl.attachShader(program, vertexShader);
-    this.gl.attachShader(program, fragmentShader);
-    this.gl.linkProgram(program);
-    const success = this.gl.getProgramParameter(program, this.gl.LINK_STATUS);
-    if (success) {
-      return program;
-    }
-
-    // console.log(this.gl.getProgramInfoLog(program));
-    this.gl.deleteProgram(program);
-  }
-
-  createCanvasTexture() {
+  draw() {
     const gl = this.gl;
 
-    const texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, texture);
+    this.canvas.width = this.container.offsetWidth;
+    this.canvas.height = this.container.offsetHeight;
 
-    // define size and format of level 0
-    const level = 0;
-    const internalFormat = gl.RGBA;
-    const border = 0;
-    const format = gl.RGBA;
-    const type = gl.UNSIGNED_BYTE;
-    const data = null;
-    gl.texImage2D(
-      gl.TEXTURE_2D,
-      level,
-      internalFormat,
-      this.width,
-      this.height,
-      border,
-      format,
-      type,
-      data
+    const uViewportSize = [this.canvas.clientWidth, this.canvas.clientHeight];
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.lineProgramGLBuffer);
+    this.programLineDraw.useProgram();
+    this.programLineDraw.setUniforms({
+      uLineWidth: [0.001 * this.lineWidth],
+      uCameraZoom: [this.zoom],
+      uCameraOrigin: [this.cameraX, this.cameraY],
+      uCameraRotation: [this.cameraRotation],
+      uViewportSize,
+    });
+    this.renderTo(this.framebuffers[0], this.textures[0]);
+    const vertexCount = this.fillLineDrawBufferFromScene();
+    this.gl.bufferData(
+      this.gl.ARRAY_BUFFER,
+      this.programLineDraw.buffer,
+      this.gl.STATIC_DRAW
     );
+    this.clearCanvas();
+    this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, vertexCount);
 
-    // set the filtering so we don't need mips
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    this.programBlurFilter.buffer.bind(gl);
+    this.programBlurFilter.useProgram();
+    this.programBlurFilter.setUniforms({ uViewportSize, uDirection: [0.0] });
+    this.renderTo(this.framebuffers[1], this.textures[1]);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.textures[0]);
+    gl.uniform1i(this.programBlurFilter.uniforms["texture"].location, 0);
+    this.clearCanvas();
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-    // Create and bind the framebuffer
-    const framebuffer = gl.createFramebuffer();
+    this.programBlurFilter.buffer.bind(gl);
+    this.programBlurFilter.useProgram();
+    this.programBlurFilter.setUniforms({ uViewportSize, uDirection: [1.0] });
+    this.renderTo(this.framebuffers[2], this.textures[2]);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.textures[1]);
+    gl.uniform1i(this.programBlurFilter.uniforms["texture"].location, 0);
+    this.clearCanvas();
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-    // attach the texture as the first color attachment
-    const attachmentPoint = gl.COLOR_ATTACHMENT0;
-    gl.framebufferTexture2D(
-      gl.FRAMEBUFFER,
-      attachmentPoint,
-      gl.TEXTURE_2D,
-      texture,
-      level
-    );
-
-    return { framebuffer, texture };
+    this.programCombine.buffer.bind(gl);
+    this.programCombine.useProgram();
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.textures[0]);
+    gl.uniform1i(this.programCombine.uniforms["srcData"].location, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.textures[2]);
+    gl.uniform1i(this.programCombine.uniforms["blurData"].location, 2);
+    gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+    this.clearCanvas();
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  calculateBufferSizeForScene() {
-    const objects = Object.values(this.scene);
-    this.spriteCount = objects.length;
-    return objects.reduce(
-      (acc, item) =>
-        acc +
-        item.shapes.reduce(
-          (acc, shape) => acc + (shape.length - 0.5) * this.vertexSize * 4,
-          0
-        ),
+  renderTo(framebuffer, texture) {
+    const gl = this.gl;
+
+    gl.bindFramebuffer(this.gl.FRAMEBUFFER, framebuffer);
+    framebuffer.width = this.canvas.width;
+    framebuffer.height = this.canvas.height;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      framebuffer.width,
+      framebuffer.height,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      null
+    );
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      texture,
       0
     );
   }
 
-  resetBuffer() {
-    this.bufferPos = 0;
+  clearCanvas() {
+    this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+    this.gl.clearColor(0, 0, 0, 0);
+    this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
   }
 
-  pushBuffer(...items) {
-    for (const item of items) {
-      this.buffer[this.bufferPos++] = item;
-    }
+  createTextureAndFramebuffer() {
+    const gl = this.gl;
+
+    const framebuffer = gl.createFramebuffer();
+    const texture = gl.createTexture();
+
+    return { framebuffer, texture };
   }
 
-  fillBufferFromScene() {
+  fillLineDrawBufferFromScene() {
     let vertexCount = 0;
     let visible,
       shape,
@@ -659,11 +560,32 @@ class ViewportWebGL {
       shapesIdx,
       shapes;
 
-    this.resetBuffer();
+    const objects = Object.values(this.scene);
+    this.spriteCount = objects.length;
+    const bufferSize = objects.reduce(
+      (acc, item) =>
+        acc +
+        item.shapes.reduce(
+          (acc, shape) => acc + (shape.length - 0.5) * this.vertexSize * 4,
+          0
+        ),
+      0
+    );
+
+    // Re-allocate larger buffer if current is too small for the scene.
+    this.actualBufferSize = this.programLineDraw.buffer.length;
+    this.calculatedBufferSize = bufferSize;
+    if (bufferSize > this.programLineDraw.buffer.length) {
+      this.programLineDraw.buffer = new Float32Array(
+        Math.max(bufferSize * 1.5, this.programLineDraw.buffer.length * 2)
+      );
+    }
+
+    this.programLineDraw.resetBuffer();
 
     const bufferVertex = (shapeIdx, lineIdx) => {
       vertexCount++;
-      this.pushBuffer(
+      this.programLineDraw.pushBuffer(
         lineIdx,
         shape[shapeIdx - 1][0],
         shape[shapeIdx - 1][1],
@@ -718,123 +640,6 @@ class ViewportWebGL {
     }
 
     return vertexCount;
-  }
-
-  setUniforms(data) {
-    Object.keys(data).forEach((key) =>
-      this.gl[`uniform${data[key].length}f`].call(
-        this.gl,
-        this.uniforms[key],
-        ...data[key]
-      )
-    );
-  }
-}
-
-class GLProgram {
-  TYPE_SIZES = {
-    0x1406: 1, // FLOAT
-    0x8b50: 2, // FLOAT_VEC2
-    0x8b51: 3, // FLOAT_VEC3
-    0x8b52: 4, // FLOAT_VEC4
-  }
-
-  constructor(optionsIn = {}) {
-    this.options = { ...this.defaultOptions(), ...optionsIn };
-    this.gl = this.options.gl;
-    this.debug = this.options.debug || false;
-  }
-
-  defaultOptions() {
-    return {};
-  }
-
-  async initialize() {
-    const gl = this.gl;
-
-    const [vertexShaderSrc, fragmentShaderSrc] = await Promise.all(
-      [
-        this.options.vertexShaderName,
-        this.options.fragmentShaderName,
-      ].map((name) => this.fetchShader(name))
-    );
-
-    const program = this.createProgram(
-      this.createShader(gl.VERTEX_SHADER, vertexShaderSrc),
-      this.createShader(gl.FRAGMENT_SHADER, fragmentShaderSrc)
-    );
-
-    // Index uniform locations by name
-    const uniforms = {};
-    const numUniforms = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
-    for (let i = 0; i < numUniforms; i++) {
-      const info = gl.getActiveUniform(program, i);
-      uniforms[info.name] = {
-        info,
-        location: gl.getUniformLocation(program, info.name)
-      };
-    }
-
-    // Count total vertex size and index by name
-    const numAttribs = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
-    const attribs = {};
-    let vertexSize = 0;
-    for (let i = 0; i < numAttribs; i++) {
-      const info = gl.getActiveAttrib(program, i);
-      const size = this.TYPE_SIZES[info.type];
-      vertexSize += size;
-      attribs[info.name] = {
-        info,
-        size,
-        index: i
-      };
-    }
-
-    Object.assign(this, { program, uniforms, attribs, vertexSize });
-  }
-
-  useProgram() {
-    this.gl.useProgram(this.program);
-
-    // Set up attribute pointers into the buffer
-    const numAttribs = gl.getProgramParameter(this.program, gl.ACTIVE_ATTRIBUTES);
-    let pos = 0;
-    for (let i = 0; i < numAttribs; i++) {
-      const info = gl.getActiveAttrib(program, i);
-      const size = this.TYPE_SIZES[info.type];
-      gl.vertexAttribPointer(i, size, gl.FLOAT, false, this.vertexSize * 4, pos * 4);
-      gl.enableVertexAttribArray(i);
-      pos += size;
-    }
-  }
-
-  async fetchShader(name) {
-    const resp = await fetch(`shaders/${name}.glsl`);
-    return resp.text();
-  }
-
-  createShader(type, source) {
-    const shader = this.gl.createShader(type);
-    this.gl.shaderSource(shader, source);
-    this.gl.compileShader(shader);
-    const success = this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS);
-    if (!success) {
-      throw new Error(`Failed to create shader ${success}`);
-    }
-    return shader;
-  }
-
-  createProgram(vertexShader, fragmentShader) {
-    const gl = this.gl;
-    const program = gl.createProgram();
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-    const success = gl.getProgramParameter(program, this.gl.LINK_STATUS);
-    if (!success) {
-      throw new Error(`Failed to create program ${success}`);
-    }
-    return program;
   }
 }
 
