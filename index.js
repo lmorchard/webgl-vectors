@@ -26,16 +26,16 @@ async function init() {
 
   viewport.scene.play2 = {
     position: [-150.0, -150.0],
-    shapes: heroShapes,
+    shapes: repulsorShapes,
     visible: true,
     rotation: 0.0,
-    scale: 100.0,
+    scale: 25.0,
     color: [0.0, 1.0, 1.0, 1.0],
   };
 
   viewport.scene.play3 = {
     position: [150.0, 150.0],
-    shapes: heroShapes,
+    shapes: busShapes,
     visible: true,
     rotation: 0.0,
     scale: 100.0,
@@ -50,7 +50,7 @@ async function init() {
 
     viewport.scene.play1.rotation += 0.04;
     viewport.scene.play2.rotation -= 0.04;
-    viewport.scene.play3.rotation += 0.04;
+    viewport.scene.play3.rotation -= 0.04;
     //viewport.cameraRotation -= 0.01;
     //viewport.cameraX += 1.5;
 
@@ -197,7 +197,7 @@ class ViewportWebGL {
       containerId: "main",
       canvasId: "mainCanvas",
       removeCanvas: false,
-      lineWidth: 3.0,
+      lineWidth: 2.0,
       zoom: 1.0,
       zoomMin: 0.1,
       zoomMax: 10.0,
@@ -337,7 +337,7 @@ class ViewportWebGL {
       this.scene._backdrop = {
         visible: true,
         position: [0.0, 0.0],
-        color: [1.0, 1.0, 1.0, 0.3],
+        color: [1.0, 1.0, 1.0, 0.2],
         scale: 1,
         rotation: Math.PI / 2,
         shapes: [],
@@ -465,6 +465,7 @@ class ViewportWebGL {
     this.clearCanvas();
     this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, vertexCount);
 
+    /*
     this.programBlurFilter.buffer.bind(gl);
     this.programBlurFilter.useProgram();
     this.programBlurFilter.setUniforms({ uViewportSize, uDirection: [0.0] });
@@ -482,6 +483,27 @@ class ViewportWebGL {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.textures[1]);
     gl.uniform1i(this.programBlurFilter.uniforms["texture"].location, 0);
+    this.clearCanvas();
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    */
+
+    this.programSimpleBlur.buffer.bind(gl);
+    this.programSimpleBlur.useProgram();
+    this.programSimpleBlur.setUniforms({ uViewportSize, direction: [0.0, 1.0] });
+    this.renderTo(this.framebuffers[1], this.textures[1]);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.textures[0]);
+    gl.uniform1i(this.programSimpleBlur.uniforms["texture"].location, 0);
+    this.clearCanvas();
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    this.programSimpleBlur.buffer.bind(gl);
+    this.programSimpleBlur.useProgram();
+    this.programSimpleBlur.setUniforms({ uViewportSize, direction: [1.0, 0.0] });
+    this.renderTo(this.framebuffers[2], this.textures[2]);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.textures[1]);
+    gl.uniform1i(this.programSimpleBlur.uniforms["texture"].location, 0);
     this.clearCanvas();
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -508,8 +530,8 @@ class ViewportWebGL {
     gl.activeTexture(gl.TEXTURE0);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texImage2D(
       gl.TEXTURE_2D,
       0,
