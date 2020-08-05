@@ -197,7 +197,7 @@ class ViewportWebGL {
       containerId: "main",
       canvasId: "mainCanvas",
       removeCanvas: false,
-      lineWidth: 2.0,
+      lineWidth: 1.5,
       zoom: 1.0,
       zoomMin: 0.1,
       zoomMax: 10.0,
@@ -385,7 +385,7 @@ class ViewportWebGL {
 
     this.textures = [];
     this.framebuffers = [];
-    for (let idx = 0; idx < 5; idx++) {
+    for (let idx = 0; idx < 10; idx++) {
       const { texture, framebuffer } = this.createTextureAndFramebuffer();
       this.textures.push(texture);
       this.framebuffers.push(framebuffer);
@@ -442,7 +442,11 @@ class ViewportWebGL {
       fragmentShaderName: "separable-blur-fragment",
     });
 
-    console.log("BLUR", this.programCopy, this.programSeparableBlur);
+    this.programComposite = await createGLProgram({
+      gl,
+      vertexShaderName: "composite-vertex",
+      fragmentShaderName: "composite-fragment",
+    });
   }
 
   createFullCanvasBuffer() {
@@ -492,85 +496,66 @@ class ViewportWebGL {
       outputTexture: this.textures[1],
     });
 
-    this.filterVertexBuffer.bind(gl);
-    this.programSeparableBlur.useProgram({
-      uViewportSize,
-      direction: [1.0, 0.0],
-      texture: this.textures[1],
-      kernelRadius: 13,
-      sigma: 13,
-    });
-    this.renderTo(this.framebuffers[1], this.textures[2]);
-    this.clearCanvas();
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    const kernelSizeArray = [3, 5, 7, 9, 11];
+    const blurTextureBase = 3;
 
-    this.filterVertexBuffer.bind(gl);
-    this.programSeparableBlur.useProgram({
-      uViewportSize,
-      direction: [0.0, 1.0],
-      texture: this.textures[2],
-      kernelRadius: 13,
-      sigma: 13,
-    });
-    this.renderTo(this.framebuffers[1], this.textures[1]);
-    this.clearCanvas();
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-    if (false) {
-      for (let idx = 0; idx < 2; idx++) {
-        this.filterTextureWithProgram({
-          program: this.programSeparableBlur,
-          uniforms: {
-            uViewportSize,
-            direction: [0.0, 1.0],
-            texture: this.textures[1],
-            kernelRadius: 3,
-            sigma: 3,
-          },
-          outputTexture: this.textures[2],
-        });
-
-        this.filterTextureWithProgram({
-          program: this.programSeparableBlur,
-          uniforms: {
-            uViewportSize,
-            direction: [1.0, 0.0],
-            texture: this.textures[2],
-            kernelRadius: 3,
-            sigma: 3,
-          },
-          outputTexture: this.textures[1],
-        });
-        /*
+    for (let idx = 0; idx < 5; idx++) {
+      const commonUniforms = {
+        uViewportSize,
+        kernelRadius: kernelSizeArray[idx],
+        sigma: kernelSizeArray[idx],
+      };
       this.filterTextureWithProgram({
-        program: this.programSimpleBlur,
+        program: this.programSeparableBlur,
         uniforms: {
-          uViewportSize,
-          direction: [0.0, 1.0],
+          ...commonUniforms,
           texture: this.textures[1],
+          direction: [1.0, 0.0],
         },
         outputTexture: this.textures[2],
       });
-
       this.filterTextureWithProgram({
-        program: this.programSimpleBlur,
+        program: this.programSeparableBlur,
         uniforms: {
-          uViewportSize,
-          direction: [1.0, 0.0],
+          ...commonUniforms,
           texture: this.textures[2],
+          direction: [0.0, 1.0],
         },
         outputTexture: this.textures[1],
       });
-      */
-      }
+      this.filterTextureWithProgram({
+        program: this.programCopy,
+        uniforms: {
+          uViewportSize,
+          opacity: 1.0,
+          texture: this.textures[1],
+        },
+        outputTexture: this.textures[blurTextureBase + idx],
+      });
     }
 
     this.filterVertexBuffer.bind(gl);
-    this.programCombine.useProgram({
+    this.programComposite.useProgram({
       uViewportSize,
-      srcData: this.textures[1],
-      blurData: this.textures[1],
+      blurTexture1: this.textures[blurTextureBase],
+      blurTexture2: this.textures[blurTextureBase + 1],
+      blurTexture3: this.textures[blurTextureBase + 2],
+      blurTexture4: this.textures[blurTextureBase + 3],
+      blurTexture5: this.textures[blurTextureBase + 4],
+      bloomStrength: 1.5,
+      bloomRadius: 0,
     });
+    gl.uniform1fv(this.programComposite.uniforms["bloomFactors[0]"].location, [
+      1.0,
+      0.8,
+      0.6,
+      0.4,
+      0.2,
+    ]);
+    gl.uniform3fv(
+      this.programComposite.uniforms["bloomTintColors[0]"].location,
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    );
     gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
     this.clearCanvas();
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -598,7 +583,7 @@ class ViewportWebGL {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-   
+
     gl.texImage2D(
       gl.TEXTURE_2D,
       0,
