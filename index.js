@@ -391,6 +391,13 @@ class ViewportWebGL {
       this.framebuffers.push(framebuffer);
     }
 
+    this.filterVertexBuffer = new GLBuffer(
+      gl,
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -1.0]),
+      gl.STATIC_DRAW
+    );
+
     const programLineDraw = (this.programLineDraw = new GLProgram({
       gl,
       vertexShaderName: "line-draw-vertex",
@@ -403,29 +410,39 @@ class ViewportWebGL {
       gl,
       vertexShaderName: "filter-blur-vertex",
       fragmentShaderName: "filter-blur-fragment",
-      buffer: this.createFullCanvasBuffer(),
     });
 
     this.programColorFilter = await createGLProgram({
       gl,
       vertexShaderName: "filter-vertex",
       fragmentShaderName: "filter-fragment",
-      buffer: this.createFullCanvasBuffer(),
     });
 
     this.programSimpleBlur = await createGLProgram({
       gl,
       vertexShaderName: "filter-simple-blur-vertex",
       fragmentShaderName: "filter-simple-blur-fragment",
-      buffer: this.createFullCanvasBuffer(),
+    });
+
+    this.programCopy = await createGLProgram({
+      gl,
+      vertexShaderName: "copy-vertex",
+      fragmentShaderName: "copy-fragment",
     });
 
     this.programCombine = await createGLProgram({
       gl,
       vertexShaderName: "combine-vertex",
       fragmentShaderName: "combine-fragment",
-      buffer: this.createFullCanvasBuffer(),
     });
+
+    this.programSeparableBlur = await createGLProgram({
+      gl,
+      vertexShaderName: "separable-blur-vertex",
+      fragmentShaderName: "separable-blur-fragment",
+    });
+
+    console.log("BLUR", this.programCopy, this.programSeparableBlur);
   }
 
   createFullCanvasBuffer() {
@@ -444,15 +461,15 @@ class ViewportWebGL {
     this.canvas.width = this.container.offsetWidth;
     this.canvas.height = this.container.offsetHeight;
 
+    const uTime = Date.now() / 1000.0;
     const uViewportSize = [this.canvas.clientWidth, this.canvas.clientHeight];
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.lineProgramGLBuffer);
-    this.programLineDraw.useProgram();
-    this.programLineDraw.setUniforms({
-      uLineWidth: [0.001 * this.lineWidth],
-      uCameraZoom: [this.zoom],
+    this.programLineDraw.useProgram({
+      uLineWidth: 0.001 * this.lineWidth,
+      uCameraZoom: this.zoom,
       uCameraOrigin: [this.cameraX, this.cameraY],
-      uCameraRotation: [this.cameraRotation],
+      uCameraRotation: this.cameraRotation,
       uViewportSize,
     });
     this.renderTo(this.framebuffers[0], this.textures[0]);
@@ -465,57 +482,105 @@ class ViewportWebGL {
     this.clearCanvas();
     this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, vertexCount);
 
-    /*
-    this.programBlurFilter.buffer.bind(gl);
-    this.programBlurFilter.useProgram();
-    this.programBlurFilter.setUniforms({ uViewportSize, uDirection: [0.0] });
+    this.filterTextureWithProgram({
+      program: this.programCopy,
+      uniforms: {
+        uViewportSize,
+        opacity: 1.0,
+        texture: this.textures[0],
+      },
+      outputTexture: this.textures[1],
+    });
+
+    this.filterVertexBuffer.bind(gl);
+    this.programSeparableBlur.useProgram({
+      uViewportSize,
+      direction: [1.0, 0.0],
+      texture: this.textures[1],
+      kernelRadius: 13,
+      sigma: 13,
+    });
+    this.renderTo(this.framebuffers[1], this.textures[2]);
+    this.clearCanvas();
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    this.filterVertexBuffer.bind(gl);
+    this.programSeparableBlur.useProgram({
+      uViewportSize,
+      direction: [0.0, 1.0],
+      texture: this.textures[2],
+      kernelRadius: 13,
+      sigma: 13,
+    });
     this.renderTo(this.framebuffers[1], this.textures[1]);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.textures[0]);
-    gl.uniform1i(this.programBlurFilter.uniforms["texture"].location, 0);
     this.clearCanvas();
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-    this.programBlurFilter.buffer.bind(gl);
-    this.programBlurFilter.useProgram();
-    this.programBlurFilter.setUniforms({ uViewportSize, uDirection: [1.0] });
-    this.renderTo(this.framebuffers[2], this.textures[2]);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.textures[1]);
-    gl.uniform1i(this.programBlurFilter.uniforms["texture"].location, 0);
-    this.clearCanvas();
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    */
+    if (false) {
+      for (let idx = 0; idx < 2; idx++) {
+        this.filterTextureWithProgram({
+          program: this.programSeparableBlur,
+          uniforms: {
+            uViewportSize,
+            direction: [0.0, 1.0],
+            texture: this.textures[1],
+            kernelRadius: 3,
+            sigma: 3,
+          },
+          outputTexture: this.textures[2],
+        });
 
-    this.programSimpleBlur.buffer.bind(gl);
-    this.programSimpleBlur.useProgram();
-    this.programSimpleBlur.setUniforms({ uViewportSize, direction: [0.0, 1.0] });
-    this.renderTo(this.framebuffers[1], this.textures[1]);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.textures[0]);
-    gl.uniform1i(this.programSimpleBlur.uniforms["texture"].location, 0);
-    this.clearCanvas();
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        this.filterTextureWithProgram({
+          program: this.programSeparableBlur,
+          uniforms: {
+            uViewportSize,
+            direction: [1.0, 0.0],
+            texture: this.textures[2],
+            kernelRadius: 3,
+            sigma: 3,
+          },
+          outputTexture: this.textures[1],
+        });
+        /*
+      this.filterTextureWithProgram({
+        program: this.programSimpleBlur,
+        uniforms: {
+          uViewportSize,
+          direction: [0.0, 1.0],
+          texture: this.textures[1],
+        },
+        outputTexture: this.textures[2],
+      });
 
-    this.programSimpleBlur.buffer.bind(gl);
-    this.programSimpleBlur.useProgram();
-    this.programSimpleBlur.setUniforms({ uViewportSize, direction: [1.0, 0.0] });
-    this.renderTo(this.framebuffers[2], this.textures[2]);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.textures[1]);
-    gl.uniform1i(this.programSimpleBlur.uniforms["texture"].location, 0);
-    this.clearCanvas();
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      this.filterTextureWithProgram({
+        program: this.programSimpleBlur,
+        uniforms: {
+          uViewportSize,
+          direction: [1.0, 0.0],
+          texture: this.textures[2],
+        },
+        outputTexture: this.textures[1],
+      });
+      */
+      }
+    }
 
-    this.programCombine.buffer.bind(gl);
-    this.programCombine.useProgram();
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.textures[0]);
-    gl.uniform1i(this.programCombine.uniforms["srcData"].location, 1);
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, this.textures[2]);
-    gl.uniform1i(this.programCombine.uniforms["blurData"].location, 2);
+    this.filterVertexBuffer.bind(gl);
+    this.programCombine.useProgram({
+      uViewportSize,
+      srcData: this.textures[1],
+      blurData: this.textures[1],
+    });
     gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+    this.clearCanvas();
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  filterTextureWithProgram({ program, uniforms = {}, outputTexture }) {
+    const gl = this.gl;
+    this.filterVertexBuffer.bind(gl);
+    program.useProgram(uniforms);
+    this.renderTo(this.framebuffers[0], outputTexture);
     this.clearCanvas();
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
@@ -526,12 +591,14 @@ class ViewportWebGL {
     gl.bindFramebuffer(this.gl.FRAMEBUFFER, framebuffer);
     framebuffer.width = this.canvas.width;
     framebuffer.height = this.canvas.height;
-    gl.bindTexture(gl.TEXTURE_2D, texture);
+
     gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+   
     gl.texImage2D(
       gl.TEXTURE_2D,
       0,

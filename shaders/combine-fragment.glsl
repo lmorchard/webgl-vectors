@@ -1,12 +1,13 @@
 precision highp float;
 
-varying vec2 texCoord;
+uniform vec2 uViewportSize;
 uniform sampler2D srcData;
 uniform sampler2D blurData;
 
 void main() {
-  vec4 srcColour = texture2D(srcData, texCoord);
-  vec4 blurColour = texture2D(blurData, texCoord);
-  gl_FragColor = srcColour + blurColour * 1.5;
-  //gl_FragColor = blurColour * 2.0;
+  //vec4 srcColour = texture2D(srcData, texCoord);
+  //vec4 blurColour = texture2D(blurData, texCoord);
+  vec4 srcColour = texture2D(srcData, gl_FragCoord.xy / uViewportSize);
+  vec4 blurColour = texture2D(blurData, gl_FragCoord.xy / uViewportSize);
+  gl_FragColor = srcColour + blurColour;
 }
