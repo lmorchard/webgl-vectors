@@ -42,6 +42,24 @@ async function init() {
     color: [1.0, 1.0, 0.0, 1.0],
   };
 
+  viewport.scene.play4 = {
+    position: [-150.0, 150.0],
+    shapes: heroShapes,
+    visible: true,
+    rotation: 0.0,
+    scale: 100.0,
+    color: [0.0, 0.0, 1.0, 1.0],
+  };
+
+  viewport.scene.play5 = {
+    position: [150.0, -150.0],
+    shapes: busShapes,
+    visible: true,
+    rotation: 0.0,
+    scale: 100.0,
+    color: [1.0, 1.0, 1.0, 1.0],
+  };
+
   let lastTickTime;
   const update = () => {
     const timeNow = Date.now();
@@ -51,6 +69,8 @@ async function init() {
     viewport.scene.play1.rotation += 0.04;
     viewport.scene.play2.rotation -= 0.04;
     viewport.scene.play3.rotation -= 0.04;
+    viewport.scene.play4.rotation -= 0.04;
+    viewport.scene.play5.rotation += 0.04;
     //viewport.cameraRotation -= 0.01;
     //viewport.cameraX += 1.5;
 
@@ -381,6 +401,7 @@ class ViewportWebGL {
       premultipliedAlpha: false,
     }));
 
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     gl.disable(gl.DEPTH_TEST);
 
     this.textures = [];
@@ -404,6 +425,14 @@ class ViewportWebGL {
       fragmentShaderName: "line-draw-fragment",
     }));
     await programLineDraw.initialize();
+    
+
+    const programLineWoscope = (this.programLineWoscope = new GLProgram({
+      gl,
+      vertexShaderName: "line-woscope-vertex",
+      fragmentShaderName: "line-woscope-fragment",
+    }));
+    await programLineWoscope.initialize();
     this.lineProgramGLBuffer = gl.createBuffer();
 
     this.programBlurFilter = await createGLProgram({
@@ -469,6 +498,30 @@ class ViewportWebGL {
     const uViewportSize = [this.canvas.clientWidth, this.canvas.clientHeight];
 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.lineProgramGLBuffer);
+
+    /*
+    this.programLineWoscope.useProgram({
+      uCameraZoom: this.zoom,
+      uCameraOrigin: [this.cameraX, this.cameraY],
+      uCameraRotation: this.cameraRotation,
+      uViewportSize,
+      uIntensity: 1.0,
+      uSize: 0.001,
+    });
+    //gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+    this.renderTo(this.framebuffers[0], this.textures[0]);
+    const vertexCount = this.fillLineDrawBufferFromScene(
+      this.programLineWoscope.buffer
+    );
+    this.gl.bufferData(
+      this.gl.ARRAY_BUFFER,
+      this.programLineWoscope.buffer,
+      this.gl.STATIC_DRAW
+    );
+    this.clearCanvas();
+    this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, vertexCount);
+  */
+
     this.programLineDraw.useProgram({
       uLineWidth: 0.001 * this.lineWidth,
       uCameraZoom: this.zoom,
@@ -476,9 +529,10 @@ class ViewportWebGL {
       uCameraRotation: this.cameraRotation,
       uViewportSize,
     });
+    //gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
     this.renderTo(this.framebuffers[0], this.textures[0]);
     const vertexCount = this.fillLineDrawBufferFromScene(
-      this.programLineDraw.buffer,
+      this.programLineDraw.buffer
     );
     this.gl.bufferData(
       this.gl.ARRAY_BUFFER,
@@ -488,17 +542,18 @@ class ViewportWebGL {
     this.clearCanvas();
     this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, vertexCount);
 
-    this.filterTextureWithProgram({
-      program: this.programCopy,
-      uniforms: {
-        uViewportSize,
-        opacity: 1.0,
-        texture: this.textures[0],
-      },
-      outputTexture: this.textures[1],
-    });
+   this.filterTextureWithProgram({
+    program: this.programCopy,
+    uniforms: {
+      uViewportSize,
+      opacity: 1.0,
+      texture: this.textures[0],
+    },
+    outputTexture: this.textures[1],
+  });
 
     const kernelSizeArray = [3, 5, 7, 9, 11];
+    //const kernelSizeArray = [3, 5, 9, 13, 19];
     const blurTextureBase = 3;
 
     for (let idx = 0; idx < 5; idx++) {
@@ -562,7 +617,7 @@ class ViewportWebGL {
     this.clearCanvas();
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-    this.filterVertexBuffer.bind(gl);
+   this.filterVertexBuffer.bind(gl);
     this.programCombine.useProgram({
       uViewportSize,
       srcData: this.textures[0],
@@ -639,9 +694,6 @@ class ViewportWebGL {
       position,
       scale,
       rotation,
-      deltaPosition,
-      deltaScale,
-      deltaRotation,
       color,
       lineIdx,
       shapesIdx,
@@ -661,15 +713,13 @@ class ViewportWebGL {
     );
 
     // Re-allocate larger buffer if current is too small for the scene.
+    /*
     this.actualBufferSize = buffer.length;
     this.calculatedBufferSize = bufferSize;
     if (bufferSize > buffer.length) {
-      buffer = new Float32Array(
-        Math.max(bufferSize * 1.5, buffer.length * 2)
-      );
+      buffer = new Float32Array(Math.max(bufferSize * 1.5, buffer.length * 2));
     }
-
-    this.programLineDraw.resetBuffer();
+    */
 
     const bufferVertex = (shapeIdx, lineIdx) => {
       vertexCount++;
@@ -700,9 +750,6 @@ class ViewportWebGL {
         position = [0.0, 0.0],
         scale = 0,
         rotation = 0,
-        deltaPosition = [0.0, 0.0],
-        deltaScale = 0.0,
-        deltaRotation = 0.0,
         color = [1, 1, 1, 1],
       } = this.scene[sceneKeys[sceneKeysIdx]]);
       if (!visible) {

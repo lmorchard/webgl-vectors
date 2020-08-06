@@ -1,13 +1,12 @@
 // see also: http://m1el.github.io/woscope-how/
-precision mediump float;
+precision highp float;
 #define EPS 1E-6
 #define PI 3.141592653589793
 #define PI_2 6.283185307179586
 #define PI_H 1.5707963267948966
 #define PI_Q 0.7853981633974483
 
-uniform float uTime;
-uniform float uLineWidth;
+uniform float uSize;
 uniform float uCameraZoom;
 uniform float uCameraRotation;
 uniform vec2 uCameraOrigin;
@@ -32,7 +31,7 @@ void main() {
     viewportRatio.y = uViewportSize.x / uViewportSize.y;
   }
 
-  vec2 viewportLineWidth = uLineWidth * viewportRatio;
+  //vec2 viewportLineWidth = uLineWidth * viewportRatio;
 
   mat3 mViewportToClipSpace =
       mat3(2.0 / uViewportSize.x, 0, 0, 0, -2.0 / uViewportSize.y, 0, 0, 0, 0);
@@ -70,34 +69,40 @@ void main() {
 
   float tang;
   vec2 current;
-  if (aIdx >= 2.0) {
-    current = tEnd;
-    tang = 1.0;
-  } else {
-    current = tStart;
-    tang = -1.0;
-  }
 
-  float side = (mod(aIdx, 2.0) - 0.5) * 2.0;
+  float idx = mod(aIdx, 4.0);
+
   vec2 dir = tEnd - tStart;
-
-  vColor = aColor;
-
-  uvl.xy = vec2(tang, side);
-  uvl.w = floor(aIdx / 4.0 + 0.5);
   uvl.z = length(dir);
-
-  vLen = length(dir);
 
   if (uvl.z > EPS) {
     dir = dir / uvl.z;
   } else {
-    // If the segment is too short draw a square;
+    // If the segment is too short, just draw a square
     dir = vec2(1.0, 0.0);
   }
 
+  // norm stores direction normal to the segment difference
   vec2 norm = vec2(-dir.y, dir.x);
 
-  gl_Position = vec4((current + (tang * dir + norm * side) * viewportLineWidth),
-                     0.0, 1.0);
+  // `tang` corresponds to shift "forward" or "backward"
+  if (idx >= 2.0) {
+    current = tEnd;
+    tang = 1.0;
+    uvl.x = -uSize;
+  } else {
+    current = tStart;
+    tang = -1.0;
+    uvl.x = uvl.z + uSize;
+  }
+
+  // `side` corresponds to shift to the "right" or "left"
+  float side = (mod(idx, 2.0) - 0.5) * 2.0;
+  uvl.y = side * uSize;
+  uvl.w = floor(aIdx / 4.0 + 0.5);
+
+  vColor = aColor;
+
+  gl_Position =
+      vec4((current + (tang * dir + norm * side) * uSize), 0.0, 1.0);
 }
