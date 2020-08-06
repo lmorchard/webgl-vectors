@@ -60,8 +60,7 @@ void main() {
       mat3(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, aTransform.x, aTransform.y, 1.0);
 
   mat3 mScale =
-      mat3(aTransform.z + (aDeltaTransform.z * uTime), 0.0, 0.0, 0.0,
-           aTransform.z + (aDeltaTransform.z * uTime), 0.0, 0.0, 0.0, 1.0);
+      mat3(aTransform.z, 0.0, 0.0, 0.0, aTransform.z, 0.0, 0.0, 0.0, 1.0);
 
   // TODO: Move some of these matrices into JS?
   mat3 mAll = mViewportToClipSpace * mCameraRotation * mCameraZoom *

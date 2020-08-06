@@ -682,10 +682,6 @@ class ViewportWebGL {
       buffer[bufferPos++] = position[1];
       buffer[bufferPos++] = scale;
       buffer[bufferPos++] = rotation;
-      buffer[bufferPos++] = deltaPosition[0];
-      buffer[bufferPos++] = deltaPosition[1];
-      buffer[bufferPos++] = deltaScale;
-      buffer[bufferPos++] = deltaRotation;
       buffer[bufferPos++] = color[0];
       buffer[bufferPos++] = color[1];
       buffer[bufferPos++] = color[2];
