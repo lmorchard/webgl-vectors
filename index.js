@@ -197,7 +197,7 @@ class ViewportWebGL {
       containerId: "main",
       canvasId: "mainCanvas",
       removeCanvas: false,
-      lineWidth: 1.5,
+      lineWidth: 1.25,
       zoom: 1.0,
       zoomMin: 0.1,
       zoomMax: 10.0,
@@ -335,7 +335,7 @@ class ViewportWebGL {
 
     if (!this.scene._backdrop) {
       this.scene._backdrop = {
-        visible: true,
+        visible: false, //true,
         position: [0.0, 0.0],
         color: [1.0, 1.0, 1.0, 0.2],
         scale: 1,
@@ -477,7 +477,9 @@ class ViewportWebGL {
       uViewportSize,
     });
     this.renderTo(this.framebuffers[0], this.textures[0]);
-    const vertexCount = this.fillLineDrawBufferFromScene();
+    const vertexCount = this.fillLineDrawBufferFromScene(
+      this.programLineDraw.buffer,
+    );
     this.gl.bufferData(
       this.gl.ARRAY_BUFFER,
       this.programLineDraw.buffer,
@@ -542,7 +544,7 @@ class ViewportWebGL {
       blurTexture3: this.textures[blurTextureBase + 2],
       blurTexture4: this.textures[blurTextureBase + 3],
       blurTexture5: this.textures[blurTextureBase + 4],
-      bloomStrength: 1.5,
+      bloomStrength: 1.0,
       bloomRadius: 0,
     });
     gl.uniform1fv(this.programComposite.uniforms["bloomFactors[0]"].location, [
@@ -556,6 +558,16 @@ class ViewportWebGL {
       this.programComposite.uniforms["bloomTintColors[0]"].location,
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     );
+    this.renderTo(this.framebuffers[0], this.textures[1]);
+    this.clearCanvas();
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    this.filterVertexBuffer.bind(gl);
+    this.programCombine.useProgram({
+      uViewportSize,
+      srcData: this.textures[0],
+      blurData: this.textures[1],
+    });
     gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
     this.clearCanvas();
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -619,7 +631,8 @@ class ViewportWebGL {
     return { framebuffer, texture };
   }
 
-  fillLineDrawBufferFromScene() {
+  fillLineDrawBufferFromScene(buffer) {
+    let bufferPos = 0;
     let vertexCount = 0;
     let visible,
       shape,
@@ -635,6 +648,7 @@ class ViewportWebGL {
       shapes;
 
     const objects = Object.values(this.scene);
+
     this.spriteCount = objects.length;
     const bufferSize = objects.reduce(
       (acc, item) =>
@@ -647,11 +661,11 @@ class ViewportWebGL {
     );
 
     // Re-allocate larger buffer if current is too small for the scene.
-    this.actualBufferSize = this.programLineDraw.buffer.length;
+    this.actualBufferSize = buffer.length;
     this.calculatedBufferSize = bufferSize;
-    if (bufferSize > this.programLineDraw.buffer.length) {
-      this.programLineDraw.buffer = new Float32Array(
-        Math.max(bufferSize * 1.5, this.programLineDraw.buffer.length * 2)
+    if (bufferSize > buffer.length) {
+      buffer = new Float32Array(
+        Math.max(bufferSize * 1.5, buffer.length * 2)
       );
     }
 
@@ -659,25 +673,23 @@ class ViewportWebGL {
 
     const bufferVertex = (shapeIdx, lineIdx) => {
       vertexCount++;
-      this.programLineDraw.pushBuffer(
-        lineIdx,
-        shape[shapeIdx - 1][0],
-        shape[shapeIdx - 1][1],
-        shape[shapeIdx][0],
-        shape[shapeIdx][1],
-        position[0],
-        position[1],
-        scale,
-        rotation,
-        deltaPosition[0],
-        deltaPosition[1],
-        deltaScale,
-        deltaRotation,
-        color[0],
-        color[1],
-        color[2],
-        color[3]
-      );
+      buffer[bufferPos++] = lineIdx;
+      buffer[bufferPos++] = shape[shapeIdx - 1][0];
+      buffer[bufferPos++] = shape[shapeIdx - 1][1];
+      buffer[bufferPos++] = shape[shapeIdx][0];
+      buffer[bufferPos++] = shape[shapeIdx][1];
+      buffer[bufferPos++] = position[0];
+      buffer[bufferPos++] = position[1];
+      buffer[bufferPos++] = scale;
+      buffer[bufferPos++] = rotation;
+      buffer[bufferPos++] = deltaPosition[0];
+      buffer[bufferPos++] = deltaPosition[1];
+      buffer[bufferPos++] = deltaScale;
+      buffer[bufferPos++] = deltaRotation;
+      buffer[bufferPos++] = color[0];
+      buffer[bufferPos++] = color[1];
+      buffer[bufferPos++] = color[2];
+      buffer[bufferPos++] = color[3];
     };
 
     const sceneKeys = Object.keys(this.scene).sort();
